@@ -105,8 +105,8 @@ const VenuePage: React.FC = () => {
   const columns: Column<Venue>[] = [
     {
       key: 'name',
-      header: 'Name',
-      mobileLabel: 'Name'
+      header: 'Location',
+      mobileLabel: 'Location'
     },
     {
       key: 'description',
@@ -116,8 +116,8 @@ const VenuePage: React.FC = () => {
     },
     {
       key: 'conferenceRoom',
-      header: 'Conference Room',
-      mobileLabel: 'Conference Room',
+      header: 'Venue',
+      mobileLabel: 'Venue',
       render: (value) => value || '-'
     },
     {
@@ -192,8 +192,8 @@ const VenuePage: React.FC = () => {
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
-            label="Venue Name"
-            name="name"
+            label="Location"
+            name="location"
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             required
@@ -210,8 +210,8 @@ const VenuePage: React.FC = () => {
           />
 
           <Input
-            label="Conference Room"
-            name="conferenceRoom"
+            label="Venue"
+            name="Venue"
             value={formData.conferenceRoom}
             onChange={(e) => setFormData({ ...formData, conferenceRoom: e.target.value })}
             placeholder="Enter conference room (optional)"
