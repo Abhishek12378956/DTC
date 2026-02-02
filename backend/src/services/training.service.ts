@@ -54,10 +54,18 @@ export class TrainingService {
              u.firstName + ' ' + u.lastName as createdByName,
              tr.id as trainer_id,
              tr.trainerName as trainer_name,
-             tr.trainerType as trainer_type
+             tr.trainerType as trainer_type,
+             v.id as venue_id,
+             v.name as venue_name,
+             v.description as venue_description,
+             v.locationId,
+             l.name as locationName,
+             v.is_active as venue_is_active
       FROM trainings t
       LEFT JOIN users u ON t.createdBy = u.id
       LEFT JOIN trainers tr ON t.trainerId = tr.id
+      LEFT JOIN venues v ON t.venueId = v.id
+      LEFT JOIN locations l ON v.locationId = l.id
       ${whereClause}
       ORDER BY CASE WHEN t.trainingStartDate IS NOT NULL THEN 0 ELSE 1 END, t.trainingStartDate DESC, t.createdAt DESC
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
@@ -68,20 +76,32 @@ export class TrainingService {
 
     const dataResult = await request.query(dataQuery);
     const trainings = dataResult.recordset.map(training => {
-      // Transform flat result to nested trainer object
+      // Transform flat result to nested trainer and venue objects
       const transformedTraining = {
         ...training,
         trainer: training.trainer_id ? {
           id: training.trainer_id,
           name: training.trainer_name,
           type: training.trainer_type
+        } : null,
+        venue: training.venue_id ? {
+          id: training.venue_id,
+          name: training.venue_name,
+          description: training.venue_description,
+          locationId: training.locationId,
+          locationName: training.locationName,
+          is_active: training.venue_is_active
         } : null
       };
       
-      // Remove the flat trainer fields
+      // Remove the flat trainer and venue fields
       delete transformedTraining.trainer_id;
       delete transformedTraining.trainer_name;
       delete transformedTraining.trainer_type;
+      delete transformedTraining.venue_id;
+      delete transformedTraining.venue_name;
+      delete transformedTraining.venue_description;
+      delete transformedTraining.venue_is_active;
       
       return transformedTraining;
     });
@@ -117,10 +137,18 @@ export class TrainingService {
                u.firstName + ' ' + u.lastName as createdByName,
                tr.id as trainer_id,
                tr.trainerName as trainer_name,
-               tr.trainerType as trainer_type
+               tr.trainerType as trainer_type,
+               v.id as venue_id,
+               v.name as venue_name,
+               v.description as venue_description,
+               v.locationId,
+               l.name as locationName,
+               v.is_active as venue_is_active
         FROM trainings t
         LEFT JOIN users u ON t.createdBy = u.id
         LEFT JOIN trainers tr ON t.trainerId = tr.id
+        LEFT JOIN venues v ON t.venueId = v.id
+        LEFT JOIN locations l ON v.locationId = l.id
         WHERE t.id = @id
       `);
 
@@ -128,20 +156,32 @@ export class TrainingService {
     
     const training = result.recordset[0];
     
-    // Transform flat result to nested trainer object
+    // Transform flat result to nested trainer and venue objects
     const transformedTraining = {
       ...training,
       trainer: training.trainer_id ? {
         id: training.trainer_id,
         name: training.trainer_name,
         type: training.trainer_type
+      } : null,
+      venue: training.venue_id ? {
+        id: training.venue_id,
+        name: training.venue_name,
+        description: training.venue_description,
+        locationId: training.locationId,
+        locationName: training.locationName,
+        is_active: training.venue_is_active
       } : null
     };
     
-    // Remove the flat trainer fields
+    // Remove the flat trainer and venue fields
     delete transformedTraining.trainer_id;
     delete transformedTraining.trainer_name;
     delete transformedTraining.trainer_type;
+    delete transformedTraining.venue_id;
+    delete transformedTraining.venue_name;
+    delete transformedTraining.venue_description;
+    delete transformedTraining.venue_is_active;
 
     return transformedTraining;
   }

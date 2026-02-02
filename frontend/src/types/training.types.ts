@@ -29,7 +29,8 @@ export interface Training {
     id: number;
     name: string;
     description?: string;
-    conferenceRoom?: string;
+    locationId?: number;
+    locationName?: string;
     is_active: boolean;
   };
 }

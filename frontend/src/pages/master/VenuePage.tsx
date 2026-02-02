@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { venueApi } from '../../api/venueApi';
-import { Venue, VenueCreateInput } from '../../types/venue.types';
+import { Venue, VenueCreateInput, Location } from '../../types/venue.types';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import TextArea from '../../components/common/TextArea';
@@ -17,11 +17,14 @@ const VenuePage: React.FC = () => {
   const [formData, setFormData] = useState<VenueCreateInput>({ 
     name: '', 
     description: '', 
-    conferenceRoom: '', 
+    locationId: 0,
     is_active: true 
   });
   const [editingVenue, setEditingVenue] = useState<Venue | null>(null);
   const [saving, setSaving] = useState(false);
+  const [locationName, setLocationName] = useState('');
+  const [venueConferences, setVenueConferences] = useState<string[]>([]);
+  const [currentInput, setCurrentInput] = useState('');
   const loadingRef = useRef(false);
 
   const loadVenues = async () => {
@@ -45,23 +48,48 @@ const VenuePage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim()) {
-      showToast('Venue name is required', 'error');
+    
+    if (!locationName.trim()) {
+      showToast('Location name is required', 'error');
+      return;
+    }
+
+    // Filter out empty venue conferences
+    const validConferences = venueConferences.filter(conf => conf.trim() !== '');
+    
+    if (validConferences.length === 0) {
+      showToast('At least one venue conference is required', 'error');
       return;
     }
 
     setSaving(true);
     try {
+      // For now, we'll need to handle this differently since we're not using dropdown
+      // We'll need to either create a new location or find an existing one
+      // For simplicity, let's assume we're creating a new venue with a new location
+      // This will need backend support to handle location creation/lookup
+      
       if (editingVenue) {
+        // For editing, we only update the single venue
         await venueApi.updateVenue(editingVenue.id!, formData);
         showToast('Venue updated successfully', 'success');
       } else {
-        await venueApi.createVenue(formData);
-        showToast('Venue created successfully', 'success');
+        // For creating, we create multiple venues for each conference
+        for (const conference of validConferences) {
+          const venueData = {
+            ...formData,
+            name: conference.trim()
+          };
+          await venueApi.createVenue(venueData);
+        }
+        showToast(`${validConferences.length} venue(s) created successfully`, 'success');
       }
       
       setShowForm(false);
-      setFormData({ name: '', description: '', conferenceRoom: '', is_active: true });
+      setFormData({ name: '', description: '', locationId: 0, is_active: true });
+      setLocationName('');
+      setVenueConferences([]);
+      setCurrentInput('');
       setEditingVenue(null);
       loadVenues();
     } catch (error: any) {
@@ -71,14 +99,29 @@ const VenuePage: React.FC = () => {
     }
   };
 
+  const addVenueConference = () => {
+    if (currentInput.trim() !== '') {
+      setVenueConferences([...venueConferences, currentInput.trim()]);
+      setCurrentInput(''); // Clear the input for next entry
+    }
+  };
+
+  const removeVenueConference = (index: number) => {
+    const newConferences = venueConferences.filter((_, i) => i !== index);
+    setVenueConferences(newConferences);
+  };
+
   const handleEdit = (venue: Venue) => {
     setEditingVenue(venue);
     setFormData({
       name: venue.name,
       description: venue.description || '',
-      conferenceRoom: venue.conferenceRoom || '',
+      locationId: venue.locationId || 0,
       is_active: venue.is_active
     });
+    setLocationName(venue.locationName || '');
+    setVenueConferences([venue.name]); // For editing, show only the current venue
+    setCurrentInput('');
     setShowForm(true);
   };
 
@@ -98,26 +141,29 @@ const VenuePage: React.FC = () => {
 
   const openAddForm = () => {
     setEditingVenue(null);
-    setFormData({ name: '', description: '', conferenceRoom: '', is_active: true });
+    setFormData({ name: '', description: '', locationId: 0, is_active: true });
+    setLocationName('');
+    setVenueConferences([]);
+    setCurrentInput('');
     setShowForm(true);
   };
 
   const columns: Column<Venue>[] = [
     {
-      key: 'name',
+      key: 'locationName',
       header: 'Location',
-      mobileLabel: 'Location'
+      mobileLabel: 'Location',
+      render: (value) => value || '-'
+    },
+    {
+      key: 'name',
+      header: 'Venue Conference',
+      mobileLabel: 'Venue Conference'
     },
     {
       key: 'description',
       header: 'Description',
       mobileLabel: 'Description',
-      render: (value) => value || '-'
-    },
-    {
-      key: 'conferenceRoom',
-      header: 'Venue',
-      mobileLabel: 'Venue',
       render: (value) => value || '-'
     },
     {
@@ -192,13 +238,54 @@ const VenuePage: React.FC = () => {
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
-            label="Location"
+            label="Location *"
             name="location"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            value={locationName}
+            onChange={(e) => setLocationName(e.target.value)}
+            placeholder="Enter location name"
             required
-            placeholder="Enter venue name"
           />
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Venue Conferences *
+            </label>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {venueConferences.map((conference, index) => (
+                <div
+                  key={index}
+                  className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200"
+                >
+                  {conference}
+                  <button
+                    type="button"
+                    onClick={() => removeVenueConference(index)}
+                    className="ml-2 text-blue-600 hover:text-blue-800 focus:outline-none"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="relative">
+              <Input
+                value={currentInput}
+                onChange={(e) => setCurrentInput(e.target.value)}
+                placeholder="Enter conference room name"
+                className="pr-12"
+              />
+              {currentInput.trim() !== '' && (
+                <button
+                  type="button"
+                  onClick={addVenueConference}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 px-2 py-1 bg-green-500 text-white text-sm rounded hover:bg-green-600 focus:outline-none"
+                  title="Add this venue conference"
+                >
+                  ✓
+                </button>
+              )}
+            </div>
+          </div>
 
           <TextArea
             label="Description"
@@ -208,15 +295,6 @@ const VenuePage: React.FC = () => {
             placeholder="Enter venue description (optional)"
             rows={3}
           />
-
-          <Input
-            label="Venue"
-            name="Venue"
-            value={formData.conferenceRoom}
-            onChange={(e) => setFormData({ ...formData, conferenceRoom: e.target.value })}
-            placeholder="Enter conference room (optional)"
-          />
-
 
           <div className="flex items-center">
             <input

@@ -128,15 +128,27 @@ CREATE TABLE assignment_recipients (
   UNIQUE(assignmentId, userId)
 );
 
--- Venues table (for configurable training venues)
-CREATE TABLE venues (
+-- Locations table (for configurable training locations)
+CREATE TABLE locations (
   id INT IDENTITY(1,1) PRIMARY KEY,
   name NVARCHAR(150) NOT NULL UNIQUE,
   description NVARCHAR(255),
-  conferenceRoom NVARCHAR(255),
   is_active BIT DEFAULT 1,
   createdAt DATETIME2 DEFAULT SYSUTCDATETIME(),
   updatedAt DATETIME2 DEFAULT SYSUTCDATETIME()
+);
+
+-- Venues table (for conference rooms within locations)
+CREATE TABLE venues (
+  id INT IDENTITY(1,1) PRIMARY KEY,
+  name NVARCHAR(150) NOT NULL, -- Conference room name
+  locationId INT NOT NULL,
+  description NVARCHAR(255),
+  is_active BIT DEFAULT 1,
+  createdAt DATETIME2 DEFAULT SYSUTCDATETIME(),
+  updatedAt DATETIME2 DEFAULT SYSUTCDATETIME(),
+  FOREIGN KEY (locationId) REFERENCES locations(id),
+  UNIQUE(locationId, name) -- Unique conference room name within each location
 );
 
 -- Categories table (for configurable training categories)
@@ -196,8 +208,11 @@ CREATE INDEX IX_trainers_trainerName ON trainers(trainerName);
 CREATE INDEX IX_trainers_trainerType ON trainers(trainerType);
 CREATE INDEX IX_trainers_categoryId ON trainers(categoryId);
 CREATE INDEX IX_trainers_is_active ON trainers(is_active);
+CREATE INDEX IX_locations_name ON locations(name);
+CREATE INDEX IX_locations_is_active ON locations(is_active);
 CREATE INDEX IX_venues_name ON venues(name);
 CREATE INDEX IX_venues_is_active ON venues(is_active);
+CREATE INDEX IX_venues_locationId ON venues(locationId);
 CREATE INDEX IX_trainings_venueId ON trainings(venueId);
 
 
@@ -225,13 +240,21 @@ INSERT INTO categories (name, description, is_active) VALUES
 ('DMT', 'DMT specific training', 1),
 ('Wellness', 'Wellness and health related training', 1);
 
--- Insert default venues
-INSERT INTO venues (name, description, conferenceRoom, is_active) VALUES
-('Conference Room A', 'Main conference room with AV equipment', 'Conference Room', 1),
-('Training Room B', 'Dedicated training space with computers', 'Conference Room', 1),
-('Virtual Classroom', 'Online training platform', 'Virtual', 1),
-('Meeting Room C', 'Small meeting room for group discussions', 'Conference Room', 1),
-('Auditorium', 'Large auditorium for presentations', 'Conference Room', 1);
+-- Insert default locations
+INSERT INTO locations (name, description, is_active) VALUES
+('Main Office', 'Primary office location', 1),
+('Branch Office A', 'Secondary office location', 1),
+('Virtual Campus', 'Online training location', 1);
+
+-- Insert default venues (conference rooms) with location references
+INSERT INTO venues (name, locationId, description, is_active) VALUES
+('Conference Room A', 1, 'Main conference room with AV equipment', 1),
+('Training Room B', 1, 'Dedicated training space with computers', 1),
+('Meeting Room C', 1, 'Small meeting room for group discussions', 1),
+('Auditorium', 1, 'Large auditorium for presentations', 1),
+('Conference Room D', 2, 'Branch office meeting space', 1),
+('Virtual Classroom 1', 3, 'Online training platform', 1),
+('Virtual Classroom 2', 3, 'Secondary online training space', 1);
 
 GO
 

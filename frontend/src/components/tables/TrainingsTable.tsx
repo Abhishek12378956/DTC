@@ -35,7 +35,13 @@ const TrainingsTable: React.FC<TrainingsTableProps> = ({ trainings, onEdit, onDe
       key: 'venue',
       header: 'Venue',
       mobileLabel: 'Venue',
-      render: (value) => value || 'TBD'
+      render: (value) => {
+        if (typeof value === 'object' && value !== null) {
+          // New structure: venue has name and locationName
+          return `${value.locationName || 'TBD'} - ${value.name || 'TBD'}`;
+        }
+        return value || 'TBD';
+      }
     },
     {
       key: 'trainer',
@@ -135,7 +141,10 @@ const TrainingsTable: React.FC<TrainingsTableProps> = ({ trainings, onEdit, onDe
         <div>
           <span className="text-gray-600 block mb-1">Venue:</span>
           <p className="font-medium text-gray-900">
-            {typeof training.venue === 'object' ? training.venue.name : training.venue || 'TBD'}
+            {typeof training.venue === 'object' && training.venue !== null 
+              ? `${training.venue.locationName || 'TBD'} - ${training.venue.name || 'TBD'}`
+              : training.venue || 'TBD'
+            }
           </p>
         </div>
         <div>

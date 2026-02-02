@@ -7,7 +7,7 @@ import { venueApi } from '../../api/venueApi';
 import { TrainingCreateInput } from '../../types/training.types';
 import { CategoryOption } from '../../types/category.types';
 import { TrainerOption } from '../../types/trainer.types';
-import { VenueOption } from '../../types/venue.types';
+import { LocationOption, VenueOption } from '../../types/venue.types';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Select } from '../../components/common/Select';
@@ -27,7 +27,9 @@ const TrainingCreatePage: React.FC = () => {
   
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
   const [trainerOptions, setTrainerOptions] = useState<TrainerOption[]>([]);
+  const [locationOptions, setLocationOptions] = useState<LocationOption[]>([]);
   const [venueOptions, setVenueOptions] = useState<VenueOption[]>([]);
+  const [selectedLocationId, setSelectedLocationId] = useState<number | undefined>(undefined);
 
   const [formData, setFormData] = useState<TrainingCreateInput>({
     topic: '',
@@ -53,7 +55,7 @@ const TrainingCreatePage: React.FC = () => {
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
-  // Load categories, trainers, and venues on component mount
+  // Load categories, trainers, and locations on component mount
   useEffect(() => {
     const loadCategories = async () => {
       try {
@@ -73,19 +75,40 @@ const TrainingCreatePage: React.FC = () => {
       }
     };
 
-    const loadVenues = async () => {
+    const loadLocations = async () => {
       try {
-        const venues = await venueApi.getActiveVenues();
-        setVenueOptions(venues);
+        const locations = await venueApi.getActiveLocations();
+        setLocationOptions(locations);
       } catch (error) {
-        showToast('Failed to load venues', 'error');
+        showToast('Failed to load locations', 'error');
       }
     };
 
     loadCategories();
     loadTrainers();
-    loadVenues();
+    loadLocations();
   }, [showToast]);
+
+  // Load venues when location is selected
+  useEffect(() => {
+    if (selectedLocationId) {
+      const loadVenues = async () => {
+        try {
+          const venues = await venueApi.getVenuesByLocation(selectedLocationId);
+          setVenueOptions(venues);
+          // Reset venue selection when location changes
+          setFormData(prev => ({ ...prev, venueId: undefined }));
+        } catch (error) {
+          showToast('Failed to load venues', 'error');
+          setVenueOptions([]);
+        }
+      };
+      loadVenues();
+    } else {
+      setVenueOptions([]);
+      setFormData(prev => ({ ...prev, venueId: undefined }));
+    }
+  }, [selectedLocationId, showToast]);
 
   // Combine date and time fields to form datetime strings
   useEffect(() => {
@@ -113,11 +136,11 @@ const TrainingCreatePage: React.FC = () => {
 
     // Re-validate topic field on blur
     if (name === 'topic') {
-      const fieldRegex = /^[a-zA-Z\s]*$/;
+      const fieldRegex = /^[a-zA-Z0-9\s@.*&\-+()\/,]+$/;
       if (value && !fieldRegex.test(value)) {
         setErrors(prev => ({ 
           ...prev, 
-          [name]: 'Special characters and numbers are not allowed. Only letters and spaces are permitted.' 
+          [name]: 'Only letters, numbers, and special characters @ . * & - + ( ) / , are allowed' 
         }));
       }
     }
@@ -173,14 +196,18 @@ const TrainingCreatePage: React.FC = () => {
     
     // Validate topic field to prevent special characters and numbers
     if (name === 'topic') {
-      // Allow only letters and spaces
-      const fieldRegex = /^[a-zA-Z\s]*$/;
+      // Allow letters, spaces, numbers, and special characters: @, ., *, &, -, +, (), /, comma
+      // Changed + to * to allow empty string (for deletion)
+      const fieldRegex = /^[a-zA-Z0-9\s@.*&\-+()\/,]*$/;
       if (!fieldRegex.test(value)) {
         setErrors(prev => ({ 
           ...prev, 
-          [name]: 'Special characters and numbers are not allowed. Only letters and spaces are permitted.' 
+          [name]: 'Only letters, numbers, and special characters @ . * & - + ( ) / , are allowed' 
         }));
-        return; // Don't update the form data if validation fails
+        // Do not return here, allow the value to be set so deletion works
+      } else {
+        // Clear error if valid
+        setErrors(prev => ({ ...prev, [name]: '' }));
       }
     }
     
@@ -192,7 +219,25 @@ const TrainingCreatePage: React.FC = () => {
     setFormData(prev => ({ ...prev, trainerId }));
   };
 
+  const handleLocationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const locationId = e.target.value ? Number(e.target.value) : undefined;
+    setSelectedLocationId(locationId);
+  };
+
+  // Function to check if a date is Sunday
+  const isSunday = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.getDay() === 0; // 0 = Sunday
+  };
+
   const handleDateTimeChange = (field: string, value: string) => {
+    // Validate date constraints (only for date fields)
+    if (field.includes('Date') && value) {
+      if (isSunday(value)) {
+        return; // Silently prevent Sunday selection
+      }
+    }
+    
     // Validate time constraints
     if (field === 'startTime' && value) {
       const [hours, minutes] = value.split(':').map(Number);
@@ -259,13 +304,16 @@ const TrainingCreatePage: React.FC = () => {
   };
 
   // Generate duration options for multi-day trainings
-  const durationOptions = Array.from({ length: 16 }, (_, i) => {
-    const hours = 0.5 + (i * 0.5);
-    return {
-      value: hours,
-      label: hours === Math.floor(hours) ? `${hours} hours` : `${hours} hours`
-    };
-  });
+  const durationOptions = [
+    { value: 0.5, label: '30 minutes' },
+    ...Array.from({ length: 15 }, (_, i) => {
+      const hours = 1 + (i * 0.5);
+      return {
+        value: hours,
+        label: hours === Math.floor(hours) ? `${hours} hours` : `${hours} hours`
+      };
+    })
+  ];
 
   // Format duration display
   const formatDuration = (minutes: number) => {
@@ -311,12 +359,17 @@ const TrainingCreatePage: React.FC = () => {
       return;
     }
 
+    if (!formData.venueId) {
+      showToast('Please select a venue conference', 'error');
+      return;
+    }
+
     // Validate topic field
-    const fieldRegex = /^[a-zA-Z\s]*$/;
+    const fieldRegex = /^[a-zA-Z0-9\s@.*&\-+()\/,]+$/;
     if (!fieldRegex.test(formData.topic)) {
       setErrors(prev => ({ 
         ...prev, 
-        topic: 'Special characters and numbers are not allowed. Only letters and spaces are permitted.' 
+        topic: 'Only letters, numbers, and special characters @ . * & - + ( ) / , are allowed' 
       }));
       showToast('Please fix validation errors before submitting', 'error');
       return;
@@ -398,23 +451,46 @@ const TrainingCreatePage: React.FC = () => {
           rows={3}
         />
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Venue
-          </label>
-          <select
-            name="venueId"
-            value={formData.venueId?.toString() || ''}
-            onChange={(e) => setFormData(prev => ({ ...prev, venueId: e.target.value ? Number(e.target.value) : undefined }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">Select a venue</option>
-            {venueOptions.map((venue) => (
-              <option key={venue.value} value={venue.value}>
-                {venue.label}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Location
+            </label>
+            <select
+              value={selectedLocationId?.toString() || ''}
+              onChange={handleLocationChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select a Location</option>
+              {locationOptions.map((location) => (
+                <option key={location.value} value={location.value}>
+                  {location.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Venue Conference
+            </label>
+            <select
+              name="venueId"
+              value={formData.venueId?.toString() || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, venueId: e.target.value ? Number(e.target.value) : undefined }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={!selectedLocationId}
+            >
+              <option value="">
+                {selectedLocationId ? 'Select a Venue Conference' : 'Select Location First'}
               </option>
-            ))}
-          </select>
+              {venueOptions.map((venue) => (
+                <option key={venue.value} value={venue.value}>
+                  {venue.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
